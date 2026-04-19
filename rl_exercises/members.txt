@@ -1,3 +1,2 @@
-member 1: me
-member 2: 
-member 3: 
+member 1: Maximilian Olschewski
+member 2: Lou Kielhorn
