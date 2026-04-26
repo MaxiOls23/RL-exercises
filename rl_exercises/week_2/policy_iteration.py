@@ -92,7 +92,6 @@ class PolicyIteration(AbstractAgent):
     def update_agent(self, *args: tuple, **kwargs: dict) -> None:
         """Run policy iteration to compute the optimal policy and state-action values."""
         if not self.policy_fitted:
-
             printr("Initial policy: ", self.pi)
             self.Q, self.pi, self.steps = policy_iteration(
                 self.Q,

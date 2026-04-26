@@ -1,0 +1,14 @@
+Key Findings
+- Generalization: The Unaware agent converged to a static "always right" policy [1, 1, 1, 1, 1]. While effective for the train set, it lacked the flexibility to handle environmental shifts in the test set.
+- In the OOD test set (80% slip), the Aware agent fundamentally shifted its policy to [1, 0, 0, 0, 0]. It recognized that at 80% slip, attempting to move right is not good.
+  It prioritized staying in a known state or moving left to secure a safer smaller reward.
+- The Aware agent significantly outperformed the Unaware agent in the OOD test (9.075 vs 6.550).
+  This proves that knowing the specific context allows the agent to switch from an aggressive strategy to a riskless one.
+
+Comparison with "Contextualize Me"
+- The results align with the paper's assertion that context-awareness is critical for generalization.
+  The performance gap is most visible in the OOD scenarios where the environment dynamics deviate significantly from the training average.
+
+Conclusion
+Without context, an agent is forced to solve a "wrong or blurred" version of the world. Providing context features like "slip" turns the problem from a noisy,
+unobservable challenge back into a solvable cMDP, enabling the risk-aware decision making observed in the test set results.
