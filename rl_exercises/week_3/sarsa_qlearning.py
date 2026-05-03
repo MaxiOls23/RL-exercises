@@ -186,6 +186,12 @@ class TDAgent(AbstractAgent):
         """
 
         # Q learning update rule
-        # TODO: Implement the Q-Learning update rule here.
+        current_q = self.Q[state][action]
+        if done:
+            max_next = 0.0
+        else:
+            max_next = float(np.max(self.Q[next_state]))
 
-        return 0.0
+        updated_q = current_q + self.alpha * (reward + self.gamma * max_next - current_q)
+        self.Q[state][action] = updated_q
+        return updated_q

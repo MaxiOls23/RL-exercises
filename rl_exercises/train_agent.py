@@ -63,6 +63,9 @@ def train(cfg: DictConfig) -> float:
     elif cfg.agent == "sarsa":
         eps_greedy_policy = EpsilonGreedyPolicy(env, epsilon=0.1)
         agent = TDAgent(env, policy=eps_greedy_policy)
+    elif cfg.agent == "qlearning":
+        eps_greedy_policy = EpsilonGreedyPolicy(env, epsilon=0.1)
+        agent = TDAgent(env, policy=eps_greedy_policy, algorithm="qlearning")
     else:
         # TODO: add your agent options here
         raise NotImplementedError
