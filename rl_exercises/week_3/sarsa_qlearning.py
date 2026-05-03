@@ -6,6 +6,7 @@ from collections import defaultdict
 
 import gymnasium as gym
 import numpy as np
+from numpy import dtype, ndarray
 from rl_exercises.agent import AbstractAgent
 from rl_exercises.week_3 import EpsilonGreedyPolicy
 
@@ -106,8 +107,7 @@ class TDAgent(AbstractAgent):
         """
         state, action, reward, next_state, done, _ = batch[0]
         if self.algorithm == "sarsa":
-            # TODO: Get the next action for the lookahead in SARSA using the policy of this agent.
-            next_action = 0
+            next_action, _ = self.predict_action(next_state)
             return self.SARSA(state, action, reward, next_state, next_action, done)
         else:
             return self.Q_Learning(state, action, reward, next_state, done)
@@ -120,7 +120,7 @@ class TDAgent(AbstractAgent):
         next_state: State,
         next_action: int,
         done: bool,
-    ) -> float:
+    ) -> ndarray[tuple[Any, ...], dtype[Any]]:
         """Perform a SARSA update (on-policy)
         Q[s,a] ← Q[s,a] + alpha*[r + gamma*Q(s',a') - Q(s,a)]
 
@@ -146,12 +146,14 @@ class TDAgent(AbstractAgent):
         """
 
         # SARSA update rule
-        # TODO: Implement the SARSA update rule here.
         # Use a value of 0. for terminal states and
         # update the new Q value in the Q table of this class.
         # Return the new Q value --currently always returns 0.0
-
-        return 0.0
+        current_q = self.Q[state][action]
+        next_q = 0.0 if done else self.Q[next_state][next_action]
+        updated_q = current_q + self.alpha * (reward + self.gamma * next_q - current_q)
+        self.Q[state][action] = updated_q
+        return updated_q
 
     def Q_Learning(
         self,
