@@ -1,0 +1,11 @@
+- Decreasing width: Reward increases slower & decreases to the end of the training, but overall reward is nearly double as high as the baseline
+- Increasing width: Bigger dip (decreasing reward) at frames 14000
+
+- Increasing batch size: Reward is overall smaller and decrease rapidly at the end of the training
+- Decreasing batch size: Same behavior as increasing
+
+- Increasing buffer size: No significant difference
+- Decreasing buffer size: No significant difference
+
+- Increasing depth: Lower maximum reward 175 to 200 (baseline). Reward jumps through training
+- Decreasing depth: No big difference: Slower increasing reward and marginal lower maximum reward
