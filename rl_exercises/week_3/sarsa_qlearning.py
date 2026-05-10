@@ -192,6 +192,8 @@ class TDAgent(AbstractAgent):
         else:
             max_next = float(np.max(self.Q[next_state]))
 
-        updated_q = current_q + self.alpha * (reward + self.gamma * max_next - current_q)
+        updated_q = current_q + self.alpha * (
+            reward + self.gamma * max_next - current_q
+        )
         self.Q[state][action] = updated_q
         return updated_q
