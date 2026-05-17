@@ -1,12 +1,9 @@
 import gymnasium as gym
-import numpy as np
 import matplotlib.pyplot as plt
-
-from rliable import library as rly
-from rliable import metrics
-from rliable import plot_utils
-
+import numpy as np
 from rl_exercises.week_4.dqn import DQNAgent, set_seed
+from rliable import library as rly
+from rliable import metrics, plot_utils
 
 
 def train_seed(seed: int, num_frames: int = 50000):
@@ -34,6 +31,27 @@ def train_seed(seed: int, num_frames: int = 50000):
     return np.array(frames), np.array(rewards)
 
 
+def aggregate_func(x):
+    """
+    Aggregates metric scores by calculating the median, interquartile mean (IQM),
+    mean, and optimality gap.
+
+    Args:
+        x: The array of scores to aggregate.
+
+    Returns:
+        A NumPy array containing the aggregated metrics.
+    """
+    return np.array(
+        [
+            metrics.aggregate_median(x),
+            metrics.aggregate_iqm(x),
+            metrics.aggregate_mean(x),
+            metrics.aggregate_optimality_gap(x, gamma=500),
+        ]
+    )
+
+
 def main():
     seeds = [0, 1, 2, 3, 4]
 
@@ -49,21 +67,10 @@ def main():
 
     final_scores = rewards[:, -1][:, None]
 
-    score_dict = {
-        "DQN": final_scores
-    }
-
-    aggregate_func = lambda x: np.array([
-        metrics.aggregate_median(x),
-        metrics.aggregate_iqm(x),
-        metrics.aggregate_mean(x),
-        metrics.aggregate_optimality_gap(x, gamma=500)
-    ])
+    score_dict = {"DQN": final_scores}
 
     aggregate_scores, aggregate_cis = rly.get_interval_estimates(
-        score_dict,
-        aggregate_func,
-        reps=5000,
+        score_dict, aggregate_func, reps=50000
     )
 
     fig, axes = plot_utils.plot_interval_estimates(
@@ -75,12 +82,10 @@ def main():
 
     try:
         for ax in axes.ravel():
-
             ax.set_ylabel("")
-            for item in (ax.get_xticklabels() + ax.get_yticklabels()):
+            for item in ax.get_xticklabels() + ax.get_yticklabels():
                 item.set_fontsize(10)
     except Exception:
-
         pass
 
     for text_obj in fig.texts:

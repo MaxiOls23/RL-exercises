@@ -1,0 +1,12 @@
+1. How does the length of trajectories affect training?
+Longer trajectories increase the variance of return estimates, making gradients noisy and training unstable.
+They also worsen the temporal credit assignment problem and delay updates.
+
+2. Does the same network architecture and learning rate work for LunarLander-v2?
+No. First of all I couldn't test it on LunarLander-v2, because I got a deprecated error.
+Second the avg return is much worse with -719 which indicates that the network is not working well with LunarLander.
+
+3. How is the sample complexity related to the DQN?
+Reinforce has much worse (higher) sample complexity than DQN.
+Reinforce is on-policy and discards data after a single update, 
+while DQN is off-policy and efficiently reuses data via an experience replay buffer.

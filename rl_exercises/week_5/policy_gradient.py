@@ -166,14 +166,12 @@ class REINFORCEAgent(AbstractAgent):
         state_tensor = torch.from_numpy(state).float()
 
         if evaluate:
-
             with torch.no_grad():
                 action_probs = self.policy(state_tensor)
 
             action = torch.argmax(action_probs, dim=-1).item()
             return action, {}
         else:
-
             action_probs = self.policy(state_tensor)
             dist = torch.distributions.Categorical(action_probs)
             action = dist.sample()
@@ -199,7 +197,6 @@ class REINFORCEAgent(AbstractAgent):
         returns = []
 
         for reward in reversed(rewards):
-
             R = reward + self.gamma * R
             returns.insert(0, R)
 
@@ -234,7 +231,9 @@ class REINFORCEAgent(AbstractAgent):
         # normalize advantages
         # and add 1e-8 to the denominator to avoid division by zero
 
-        advantages = (returns_t - returns_t.mean()) / (returns_t.std(unbiased=False) + 1e-8)
+        advantages = (returns_t - returns_t.mean()) / (
+            returns_t.std(unbiased=False) + 1e-8
+        )
 
         lp_tensor = torch.stack(log_probs)
         loss = -torch.sum(lp_tensor * advantages)
@@ -302,14 +301,14 @@ class REINFORCEAgent(AbstractAgent):
             state, _ = eval_env.reset()
             done = False
             episode_return = 0.0
-            
+
             while not done:
                 action, _ = self.predict_action(state, evaluate=True)
                 next_state, reward, term, trunc, _ = eval_env.step(action)
                 episode_return += float(reward)
                 done = term or trunc
                 state = next_state
-            
+
             returns.append(episode_return)
 
         self.policy.train()  # Set back to training mode
