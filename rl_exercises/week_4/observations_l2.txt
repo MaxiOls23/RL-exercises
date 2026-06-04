@@ -1,0 +1,2 @@
+Using RLiable instead of plain averages provides you with a more robust evaluation across multiple seeds. This is important since performance can vary greatly between seeds. This also is better to evaluate since random seeds isnt a parameter you want to tweak.
+With this in mind I am more confident in the results using RLiable, since those are not sensitive to outliers and give you a better picture of the overall performance of your agent.
