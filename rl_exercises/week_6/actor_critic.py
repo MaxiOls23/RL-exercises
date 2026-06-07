@@ -153,7 +153,7 @@ class ActorCriticAgent(AbstractAgent):
             ) * float(ret.mean().item())
         else:
             ret = self.compute_returns(list(rewards))
-            adv = (ret - ret.mean()) / (ret.std(unbiased=False) + 1e-8)
+            adv = ret
 
         # policy update
         logp_t = torch.stack(log_probs)
