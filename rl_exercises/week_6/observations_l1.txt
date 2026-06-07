@@ -1,0 +1,7 @@
+After running no baseline, running-average reward, learned value function, and Generalized Advantage Estimation and plotting them some differences were observable.
+
+None baseline had a rather high variance in CartPole, but not really observable in LunarLander. I would have expected much higher variance, since in the lecture no baseline was explained as unbiased but with very high variance.
+
+Running-average was a bit more stable than no baseline in both results.
+
+Value function and GAE seemed to be way more stable across both environments. This was to be expected, since they are both unbiased and have low variance. The value function is a bit more stable than GAE, which may be due to the fact that GAE is a generalization of the value function and thus may have more variance.
