@@ -5,6 +5,7 @@ Adds GAE for low-variance advantage estimation.
 """
 
 from typing import Any, List, Tuple
+
 from pathlib import Path
 
 import gymnasium as gym
@@ -115,14 +116,18 @@ class ActorCriticAgent(AbstractAgent):
             next_values = self.value_fn(next_state_batch).squeeze(-1)
             dones_t = torch.tensor(dones, dtype=torch.float32)
 
-            deltas = torch.tensor(rewards, dtype=torch.float32) + self.gamma * next_values * (
-                1.0 - dones_t
-            ) - values
+            deltas = (
+                torch.tensor(rewards, dtype=torch.float32)
+                + self.gamma * next_values * (1.0 - dones_t)
+                - values
+            )
 
             advantages = torch.zeros_like(deltas)
             gae = 0.0
             for t in reversed(range(len(deltas))):
-                gae = deltas[t] + self.gamma * self.gae_lambda * (1.0 - dones_t[t]) * gae
+                gae = (
+                    deltas[t] + self.gamma * self.gae_lambda * (1.0 - dones_t[t]) * gae
+                )
                 advantages[t] = gae
 
             returns = advantages + values
