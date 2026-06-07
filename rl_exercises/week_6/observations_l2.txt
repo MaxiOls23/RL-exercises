@@ -1,0 +1,9 @@
+PPO vs. Actor-Critic:
+- Both PPO versions perform much better than the standard Actor-Critic baseline.
+- The standard Actor-Critic is very unstable. It learns slowly and has huge drops in performance, with scores falling below -1500.
+- This shows that standard policy methods struggle because they make updates that are too large. PPO's clipping mechanism fixes this by keeping policy changes small and safe.
+
+Vanilla PPO vs. Enhanced PPO:
+- Vanilla PPO and Enhanced PPO perform almost exactly the same. Both quickly find a good, stable strategy after about 40,000 steps.
+- This happens because LunarLander-v3 is a relatively simple environment. The core parts of PPO (clipping and mini-batch training) are already enough to solve it completely.
+- Extra features like learning-rate annealing or global gradient clipping do not help much here because the default settings are already highly optimized.
