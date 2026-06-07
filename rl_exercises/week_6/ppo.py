@@ -67,6 +67,11 @@ class PPOAgent(AbstractAgent):
         self.ent_coef = ent_coef
         self.vf_coef = vf_coef
 
+        # Keep initial configurations for tracking learning rate annealing
+        self.lr_actor = lr_actor
+        self.lr_critic = lr_critic
+        self.max_grad_norm = 0.5
+
         # networks
         self.policy = Policy(env.observation_space, env.action_space, hidden_size)
         self.value_fn = ValueNetwork(env.observation_space, hidden_size)
@@ -163,6 +168,14 @@ class PPOAgent(AbstractAgent):
                 )
                 self.optimizer.zero_grad()
                 loss.backward()
+
+                # Enhancement 2: Global Gradient Clipping
+                # Limits overall gradient sizes jointly to prevent catastrophic policy disruption
+                torch.nn.utils.clip_grad_norm_(
+                    list(self.policy.parameters()) + list(self.value_fn.parameters()),
+                    self.max_grad_norm,
+                )
+
                 self.optimizer.step()
 
         return policy_loss.item(), value_loss.item(), entropy_loss.item()
@@ -181,6 +194,12 @@ class PPOAgent(AbstractAgent):
             trajectory: List[Any] = []
 
             while not done and step_count < total_steps:
+                # Enhancement 1: Learning‑Rate Annealing
+                # Decays learning rates linearly down to 0 relative to total steps
+                frac = 1.0 - (step_count / total_steps)
+                self.optimizer.param_groups[0]["lr"] = frac * self.lr_actor
+                self.optimizer.param_groups[1]["lr"] = frac * self.lr_critic
+
                 action, logp, ent, val = self.predict(state)
                 next_state, reward, term, trunc, _ = self.env.step(action)
                 done = term or trunc
