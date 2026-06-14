@@ -7,7 +7,11 @@ The intrinsic reward is:
 where novelty(s) = RND prediction error at state s.
 """
 
-from typing import Any, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
+import os
+import pickle
+import sys
+from pathlib import Path
 
 import gymnasium as gym
 import hydra
@@ -17,6 +21,11 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa: F401
 import torch.optim as optim  # noqa: F401
 from omegaconf import DictConfig
+
+# Allow running this file directly: `python .\rl_exercises\week_7\noveid_ppo.py`
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from rl_exercises.week_6.ppo import PPOAgent, set_seed
 from rl_exercises.week_7.rnd_utils import (
     DualHeadValueNetwork,
@@ -29,6 +38,61 @@ from torch.distributions import Categorical
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = True
+
+
+import imageio
+from typing import Tuple
+
+
+def record_episode_snapshot(
+    agent: "NovelDPPOAgent", env: gym.Env, seed: int = 0, max_steps: int = 500
+) -> Tuple[np.ndarray, float]:
+    """
+    Record frames from one episode of the agent acting in the environment.
+
+    Returns frames (T,H,W,3) and total episode reward.
+    """
+    frames = []
+    try:
+        state, _ = env.reset(seed=seed)
+    except TypeError:
+        state = env.reset()
+
+    done = False
+    total_reward = 0.0
+    step_count = 0
+
+    while not done and step_count < max_steps:
+        # Render frame (requires env created with render_mode='rgb_array')
+        try:
+            frame = env.render()
+        except Exception:
+            frame = None
+        if frame is not None:
+            frames.append(frame)
+
+        action, _, _, _, _ = agent.predict(state)
+        next_state, reward, term, trunc, _ = env.step(action)
+        done = term or trunc
+        total_reward += reward
+        state = next_state
+        step_count += 1
+
+    if len(frames) == 0:
+        # Return a single blank frame to avoid errors downstream
+        frames = np.zeros((1, 84, 84, 3), dtype=np.uint8)
+
+    return np.array(frames), float(total_reward)
+
+
+def save_frames_as_gif(frames: np.ndarray, output_path: str, fps: int = 20) -> None:
+    """Save frames as GIF using imageio."""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    try:
+        imageio.mimsave(output_path, frames.astype(np.uint8), fps=fps)
+        print(f"  Saved GIF: {output_path}")
+    except Exception as e:
+        print(f"  Failed to save GIF {output_path}: {e}")
 
 
 class NovelDPPOAgent(PPOAgent):
@@ -159,15 +223,13 @@ class NovelDPPOAgent(PPOAgent):
         for param in self.target_rnd.parameters():
             param.requires_grad = False
 
-        # TODO: Single combined optimizer: policy + dual-head value + RND predictor
         combined_parameters = (
             list(self.policy.parameters())
             + list(self.value_fn.parameters())
             + list(self.predictor_rnd.parameters())
         )
 
-        # TODO: Optimizer for combined_parameters with learning rate combined_lr (Adam)
-        self.optimizer = ...
+        self.optimizer = optim.Adam(combined_parameters, lr=combined_lr)
 
         # Running statistics for observation and intrinsic reward normalization
         self.obs_rms = RunningMeanStd(shape=(obs_dim,))
@@ -186,11 +248,13 @@ class NovelDPPOAgent(PPOAgent):
     def _rnd_error(self, obs_norm: np.ndarray) -> float:
         """Compute raw RND prediction error for a single normalized observation."""
         t = torch.from_numpy(obs_norm).float().unsqueeze(0)
-        # TODO: Compute RND prediction error (MSE) between predictor and target embeddings
         with torch.no_grad():
-            target_emb = ...
-            predictor_emb = ...
-        return ...
+
+            target_emb = self.target_rnd(t)
+            predictor_emb = self.predictor_rnd(t)
+
+        error = F.mse_loss(predictor_emb, target_emb, reduction="mean")
+        return float(error.item())
 
     def _is_first_visit(self, obs: np.ndarray) -> bool:
         """
@@ -227,14 +291,12 @@ class NovelDPPOAgent(PPOAgent):
         float
             NovelD intrinsic reward (0 if not first visit).
         """
-        # TODO: compute NovelD bonus using the formula above
-        # Hint: use self._rnd_error() for novelty and self._is_first_visit() for the first-visit indicator
         if not self._is_first_visit(next_state):
             return 0.0
-        novelty_next = ...
-        novelty_curr = ...
-        bonus = ...
-        return bonus
+        novelty_next = self._rnd_error(next_state)
+        novelty_curr = self._rnd_error(state)
+        bonus = max(novelty_next - self.noveld_alpha * novelty_curr, 0.0)
+        return float(bonus)
 
     def _init_obs_normalization(self) -> None:
         """
@@ -344,19 +406,17 @@ class NovelDPPOAgent(PPOAgent):
         Tuple of: combined advantages, ext advantages, int advantages,
                   extrinsic returns, intrinsic returns.
         """
-        # TODO: compute gae for both extrinsic and intrinsic streams separately
-        # (Hint: extrinsic stream uses done mask; intrinsic stream is non-episodic — no done mask)
         rews_ext = torch.tensor(rewards_ext, dtype=torch.float32)
         rews_int = torch.tensor(rewards_int, dtype=torch.float32)
 
-        deltas_ext = ...
-        deltas_int = ...
+        deltas_ext = rews_ext + self.gamma * next_values_ext * (1 - dones) - values_ext
+        deltas_int = rews_int + self.int_gamma * next_values_int - values_int
 
         # GAE for extrinsic stream (episodic: done mask applied)
         advs_ext: List[torch.Tensor] = []
         A = 0.0
         for delta, done in zip(reversed(deltas_ext), reversed(dones)):
-            A = ...
+            A = delta + self.gamma * self.gae_lambda * A * (1 - done)
             advs_ext.insert(0, A)
         advs_ext_t = torch.stack(advs_ext)
 
@@ -364,15 +424,17 @@ class NovelDPPOAgent(PPOAgent):
         advs_int: List[torch.Tensor] = []
         A = 0.0
         for delta in reversed(deltas_int):
-            A = ...
+            A = delta + self.int_gamma * self.gae_lambda * A
             advs_int.insert(0, A)
         advs_int_t = torch.stack(advs_int)
 
-        returns_ext = ...
-        returns_int = ...
+        returns_ext = advs_ext_t + values_ext
+        returns_int = advs_int_t + values_int
 
-        # TODO: Combined advantages weighted by coefficients, then normalize
-        combined_advs = ...
+        combined_advs = self.ext_coef * advs_ext_t + self.int_coef * advs_int_t
+        combined_advs = (combined_advs - combined_advs.mean()) / (
+            combined_advs.std(unbiased=False) + 1e-8
+        )
 
         return (
             combined_advs.detach(),
@@ -405,12 +467,10 @@ class NovelDPPOAgent(PPOAgent):
         dones = torch.tensor([t[6] for t in trajectory], dtype=torch.float32)
         next_states = torch.stack([torch.from_numpy(t[7]).float() for t in trajectory])
 
-        # TODO: compute values and next values for both extrinsic and intrinsic streams without grad
         with torch.no_grad():
-            values_ext, values_int = ...
-            next_values_ext, next_values_int = ...
+            values_ext, values_int = self.value_fn(states)
+            next_values_ext, next_values_int = self.value_fn(next_states)
 
-        # TODO: compute combined advantages and returns for extrinsic and intrinsic rewards
         combined_advs, _, _, returns_ext, returns_int = self.compute_gae(
             rewards_ext,
             rewards_int,
@@ -430,24 +490,32 @@ class NovelDPPOAgent(PPOAgent):
 
         for _ in range(self.epochs):
             for b_states, b_actions, b_oldlogp, b_adv, b_ret_ext, b_ret_int in loader:
-                # TODO: --- Policy loss (clipped PPO surrogate) ---
-                probs = ...
-                dist = ...
-                new_logp = ...
-                ratio = ...
-                policy_loss = ...
+                probs = self.policy(b_states)
+                dist = Categorical(probs)
+                new_logp = dist.log_prob(b_actions)
+                ratio = torch.exp(new_logp - b_oldlogp)
+                surr1 = ratio * b_adv
+                surr2 = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps) * b_adv
+                policy_loss = -torch.min(surr1, surr2).mean()
 
-                # TODO: --- Dual-head value loss (MSE for both ext and int heads) ---
-                value_preds_ext, value_preds_int = ...
-                value_loss = ...
+                value_preds_ext, value_preds_int = self.value_fn(b_states)
+                value_loss = F.mse_loss(value_preds_ext, b_ret_ext) + F.mse_loss(
+                    value_preds_int, b_ret_int
+                )
 
-                # TODO: --- Entropy loss ---
-                entropy_loss = ...
+                entropy_loss = -dist.entropy().mean()
 
-                # TODO: --- RND predictor loss (update_proportion mask) ---
-                # Only a random subset of the minibatch is used to update the predictor
-                mask = ...
-                rnd_loss = ...
+                mask = torch.rand(b_states.shape[0], device=b_states.device) < self.update_proportion
+                if not torch.any(mask):
+                    mask[torch.randint(0, b_states.shape[0], (1,), device=b_states.device)] = True
+                b_states_norm = (
+                    b_states - torch.as_tensor(self.obs_rms.mean, dtype=b_states.dtype)
+                ) / torch.sqrt(
+                    torch.as_tensor(self.obs_rms.var, dtype=b_states.dtype) + 1e-8
+                )
+                target_emb = self.target_rnd(b_states_norm[mask])
+                predictor_emb = self.predictor_rnd(b_states_norm[mask])
+                rnd_loss = F.mse_loss(predictor_emb, target_emb)
 
                 loss = (
                     policy_loss
@@ -478,6 +546,10 @@ class NovelDPPOAgent(PPOAgent):
         total_steps: int,
         eval_interval: int = 10000,
         eval_episodes: int = 5,
+        record_snapshots: bool = False,
+        snapshot_dir: str = "exploration_snapshots",
+        snapshot_episodes: int = 3,
+        gif_fps: int = 20,
     ) -> None:
         """
         Run training loop with NovelD intrinsic exploration bonus.
@@ -493,6 +565,13 @@ class NovelDPPOAgent(PPOAgent):
         """
         eval_env = gym.make(self.env.spec.id)
         step_count = 0
+        snapshot_idx = 0
+        stats_log: List[Dict[str, Any]] = []
+        exploration_logs = []
+
+        if record_snapshots:
+            os.makedirs(snapshot_dir, exist_ok=True)
+            snapshot_steps = [int(total_steps * 0.1), int(total_steps * 0.5), int(total_steps * 0.9)]
 
         # Warm-up: initialize obs_rms and reward_rms before policy updates start
         self._init_obs_normalization()
@@ -501,6 +580,7 @@ class NovelDPPOAgent(PPOAgent):
             state, _ = self.env.reset(seed=self.seed)
             done = False
             trajectory: List[Any] = []
+            positions = []
 
             # Reset the per-episode first-visit tracker at the start of each episode
             self._episode_visited = set()
@@ -518,8 +598,6 @@ class NovelDPPOAgent(PPOAgent):
                 self.obs_rms.update(next_state[np.newaxis])
                 next_obs_norm = self._normalize_obs(next_state)
 
-                # TODO: --- NovelD intrinsic reward ---
-                # max(novelty(s_{t+1}) - alpha * novelty(s_t), 0) * first_visit(s_{t+1})
                 int_reward_raw = self.get_noveld_bonus(prev_obs_norm, next_obs_norm)
 
                 # --- Normalize intrinsic reward scale ---
@@ -543,6 +621,61 @@ class NovelDPPOAgent(PPOAgent):
                 state = next_state
                 prev_obs_norm = next_obs_norm
                 step_count += 1
+                positions.append(state.copy())
+
+                # Snapshot logic: record GIF + basic exploration stats at key steps
+                if record_snapshots and snapshot_idx < len(snapshot_steps) and step_count >= snapshot_steps[snapshot_idx]:
+                    print(f"\n[Snapshot] Recording at step {step_count}...")
+                    try:
+                        render_env = gym.make(self.env.spec.id, render_mode="rgb_array")
+                    except Exception:
+                        render_env = None
+
+                    if render_env is not None:
+                        frames, ep_reward = record_episode_snapshot(self, render_env, seed=self.seed)
+                        gif_path = os.path.join(snapshot_dir, f"snapshot_step_{step_count:06d}.gif")
+                        save_frames_as_gif(frames, gif_path, fps=gif_fps)
+                        print(f"  Episode reward: {ep_reward:.2f}")
+                    else:
+                        print("  Could not create render_env for GIF (render_mode unsupported)")
+
+                    # Compute simple exploration statistics on eval_env
+                    all_states = []
+                    all_rewards = []
+                    for ep in range(snapshot_episodes):
+                        s, _ = eval_env.reset(seed=self.seed + ep)
+                        done_ep = False
+                        ep_rewards = []
+                        while not done_ep:
+                            all_states.append(s.copy())
+                            a, _, _, _, _ = self.predict(s)
+                            s, r, term, trunc, _ = eval_env.step(a)
+                            done_ep = term or trunc
+                            ep_rewards.append(r)
+                        all_rewards.append(sum(ep_rewards))
+
+                    states_array = np.array(all_states)
+
+                    positions_array = np.array(all_states)
+
+                    centroid = positions_array.mean(axis=0)
+                    spread = np.linalg.norm(positions_array - centroid, axis=1).mean()
+                    coverage = np.std(positions_array, axis=0).mean()
+
+                    state_diversity = float(np.std(states_array, axis=0).mean()) if states_array.size else 0.0
+                    state_range = float((states_array.max(axis=0) - states_array.min(axis=0)).mean()) if states_array.size else 0.0
+                    stats = {
+                        "step": step_count,
+                        "num_states_visited": len(all_states),
+                        "state_diversity": state_diversity,
+                        "state_range": state_range,
+                        "trajectory_spread": float(spread),
+                        "trajectory_coverage": float(coverage),
+                        "avg_reward": float(np.mean(all_rewards)) if all_rewards else 0.0,
+                    }
+                    stats_log.append(stats)
+                    print(f"  Exploration stats: {stats}")
+                    snapshot_idx += 1
 
                 if step_count % eval_interval == 0:
                     mean_r, std_r = self.evaluate(eval_env, num_episodes=eval_episodes)
@@ -561,6 +694,30 @@ class NovelDPPOAgent(PPOAgent):
             )
 
         print("Training complete.")
+        if record_snapshots:
+            # Save statistics and a copy of the agent for inspection
+            stats_path = os.path.join(snapshot_dir, "exploration_stats.pkl")
+
+            txt_path = os.path.join(snapshot_dir, "exploration_summary.txt")
+
+            with open(txt_path, "w") as f:
+                for s in stats_log:
+                    f.write(str(s) + "\n")
+
+            try:
+                with open(stats_path, "wb") as f:
+                    pickle.dump(stats_log, f)
+                print(f"Saved exploration stats to: {stats_path}")
+            except Exception as e:
+                print(f"Failed to save exploration stats: {e}")
+
+            agent_path = os.path.join(snapshot_dir, "final_agent.pkl")
+            try:
+                with open(agent_path, "wb") as f:
+                    pickle.dump(self, f)
+                print(f"Saved agent to: {agent_path}")
+            except Exception as e:
+                print(f"Failed to save agent: {e}")
 
     def evaluate(
         self, eval_env: gym.Env, num_episodes: int = 10
@@ -628,6 +785,10 @@ def main(cfg: DictConfig) -> None:
         cfg.train.total_steps,
         cfg.train.eval_interval,
         cfg.train.eval_episodes,
+        record_snapshots=cfg.train.get("record_snapshots", True),
+        snapshot_dir=cfg.train.get("snapshot_dir", "exploration_snapshots"),
+        snapshot_episodes=cfg.train.get("snapshot_episodes", 3),
+        gif_fps=cfg.train.get("gif_fps", 20),
     )
 
 

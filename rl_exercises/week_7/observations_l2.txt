@@ -1,0 +1,7 @@
+{'step': 2000, 'num_states_visited': 256, 'state_diversity': 0.2920196056365967, 'state_range': 1.7855517864227295, 'trajectory_spread': 0.8014943599700928, 'trajectory_coverage': 0.2920196056365967, 'avg_reward': -147.81545472253137}
+{'step': 10000, 'num_states_visited': 276, 'state_diversity': 0.24097251892089844, 'state_range': 1.171355128288269, 'trajectory_spread': 0.7401408553123474, 'trajectory_coverage': 0.24097251892089844, 'avg_reward': -98.06359491744145}
+{'step': 18000, 'num_states_visited': 262, 'state_diversity': 0.3687506318092346, 'state_range': 1.6881928443908691, 'trajectory_spread': 1.0977500677108765, 'trajectory_coverage': 0.3687506318092346, 'avg_reward': -258.7313569653939}
+
+In the first snapshot shows moderate state diversity but low explorations, which indicates that the model is still mostly stochastic.
+In the second exploration becomes more focused since state diversity decreases. The reward also increased, which indicates improved exploitation.
+In the third snapshot state diversity increases and reward gets worse, indicating a learned instability in the policy.
