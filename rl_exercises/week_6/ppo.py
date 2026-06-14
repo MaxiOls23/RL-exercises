@@ -9,6 +9,7 @@ from typing import Any, List, Tuple
 import gymnasium as gym
 import numpy as np
 import torch
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 
@@ -67,11 +68,6 @@ class PPOAgent(AbstractAgent):
         self.ent_coef = ent_coef
         self.vf_coef = vf_coef
 
-        # Keep initial configurations for tracking learning rate annealing
-        self.lr_actor = lr_actor
-        self.lr_critic = lr_critic
-        self.max_grad_norm = 0.5
-
         # networks
         self.policy = Policy(env.observation_space, env.action_space, hidden_size)
         self.value_fn = ValueNetwork(env.observation_space, hidden_size)
@@ -105,17 +101,28 @@ class PPOAgent(AbstractAgent):
         next_values: torch.Tensor,  # noqa: F841
         dones: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        # TODO: compute advantages using GAE (Hint: replicate the GAE formula from actor critic)
+        # return None  # template placeholder
 
-        advantages = torch.zeros_like(values)
-        gae = 0.0
-        for t in reversed(range(len(rewards))):
-            delta = (
-                rewards[t] + self.gamma * next_values[t] * (1 - dones[t]) - values[t]
-            )
-            gae = delta + self.gamma * self.gae_lambda * (1 - dones[t]) * gae
-            advantages[t] = gae
-        returns = advantages + values
-        return advantages, returns
+        deltas = (
+            torch.tensor(rewards, dtype=torch.float32)
+            + self.gamma * next_values * (1 - dones)
+            - values
+        )
+        advantages: List[torch.Tensor] = []
+        A = 0.0
+        for delta, done in zip(reversed(deltas), reversed(dones)):
+            A = delta + self.gamma * self.gae_lambda * A * (1 - done)
+            advantages.insert(0, A)
+        advs = torch.stack(advantages)
+        returns = advs + values
+
+        # normalize
+        advs = (advs - advs.mean()) / (advs.std(unbiased=False) + 1e-8)
+
+        # **detach both** so that later `loss.backward()` never
+        # tries to re-enter this graph
+        return advs.detach(), returns.detach()
 
     def update(self, trajectory: List[Any]) -> None:
         # unpack trajectory
@@ -126,12 +133,20 @@ class PPOAgent(AbstractAgent):
         rewards = [t[4] for t in trajectory]
         dones = torch.tensor([t[5] for t in trajectory], dtype=torch.float32)
 
+        # TODO: compute values and next_values without gradients
+        # values = ...  # noqa: F841  # template placeholder
+        # next_values = ...  # noqa: F841  # template placeholder
+
         with torch.no_grad():
-            values = self.value_fn(states).squeeze(-1)
+            values = self.value_fn(states)
             next_states = torch.stack(
                 [torch.from_numpy(t[6]).float() for t in trajectory]
             )
-            next_values = self.value_fn(next_states).squeeze(-1)
+            next_values = self.value_fn(next_states)
+
+        # TODO: compute advantages and returns
+        # advantages = ...  # template placeholder
+        # returns = ...  # template placeholder
 
         advantages, returns = self.compute_gae(rewards, values, next_values, dones)
 
@@ -144,20 +159,32 @@ class PPOAgent(AbstractAgent):
 
         for _ in range(self.epochs):
             for b_states, b_actions, b_oldlogp, b_adv, b_ret in loader:
+                # TODO: compute policy loss, value loss, and entropy loss
+
+                # TODO: compute new log probabilities by sampling actions from the policy distribution
+                # new_logp = ...  # noqa: F841  # template placeholder
+
+                # TODO: compute the ratio of new log probabilities to old log probabilities
+
+                # TODO: compute the clipped surrogate loss using the clipped objective
+                # policy_loss = ...  # template placeholder
+
+                # TODO: compute value loss using mean squared error
+                # value_loss = ...  # template placeholder
+
+                # TODO: compute entropy loss using the distribution's entropy
+                # entropy_loss = ...  # template placeholder
+
                 probs = self.policy(b_states)
                 dist = Categorical(probs)
                 new_logp = dist.log_prob(b_actions)
-
                 ratio = torch.exp(new_logp - b_oldlogp)
-
                 surr1 = ratio * b_adv
-                surr2 = (
-                    torch.clamp(ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps) * b_adv
-                )
+                surr2 = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps) * b_adv
                 policy_loss = -torch.min(surr1, surr2).mean()
 
-                curr_values = self.value_fn(b_states).squeeze(-1)
-                value_loss = 0.5 * torch.mean((curr_values - b_ret) ** 2)
+                value_preds = self.value_fn(b_states).squeeze(-1)
+                value_loss = F.mse_loss(value_preds, b_ret)
 
                 entropy_loss = -dist.entropy().mean()
 
@@ -168,14 +195,6 @@ class PPOAgent(AbstractAgent):
                 )
                 self.optimizer.zero_grad()
                 loss.backward()
-
-                # Enhancement 2: Global Gradient Clipping
-                # Limits overall gradient sizes jointly to prevent catastrophic policy disruption
-                torch.nn.utils.clip_grad_norm_(
-                    list(self.policy.parameters()) + list(self.value_fn.parameters()),
-                    self.max_grad_norm,
-                )
-
                 self.optimizer.step()
 
         return policy_loss.item(), value_loss.item(), entropy_loss.item()
@@ -194,12 +213,6 @@ class PPOAgent(AbstractAgent):
             trajectory: List[Any] = []
 
             while not done and step_count < total_steps:
-                # Enhancement 1: Learning‑Rate Annealing
-                # Decays learning rates linearly down to 0 relative to total steps
-                frac = 1.0 - (step_count / total_steps)
-                self.optimizer.param_groups[0]["lr"] = frac * self.lr_actor
-                self.optimizer.param_groups[1]["lr"] = frac * self.lr_critic
-
                 action, logp, ent, val = self.predict(state)
                 next_state, reward, term, trunc, _ = self.env.step(action)
                 done = term or trunc
