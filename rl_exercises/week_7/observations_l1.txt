@@ -1,0 +1,14 @@
+1. Is RND a good fit for DQN and PPO?
+- PPO + RND: Yes, it is a great fit. PPO learns from current data and
+  throws it away immediately. This means the exploration rewards are
+  always fresh and correct.
+- DQN + RND: No, it is a bad fit. DQN saves old data in a
+  replay buffer. By the time DQN uses that data to learn, the exploration
+  rewards are old and wrong.
+
+2. Is there a way to see the reason from your training runs? (lunarlander_exploration_comparison.png)
+- The green line climbs the fastest and reaches the highest score.
+  This shows that because PPO uses fresh data immediately,
+  it can instantly turn the exploration rewards into progress.
+- DQN + RND (blue line) stays under PPO + RND suggesting worse performance
+- Epislion Greedy (orange line) is clearly the worst from all strategies which indicates the low scores.
