@@ -234,17 +234,11 @@ def main() -> None:
     base_opt_scores = evaluate_config(default_overrides, args.opt_seeds, args.total_steps)
     base_test_scores = evaluate_config(default_overrides, args.test_seeds, args.total_steps)
 
-    def mean(x):
-        return float(np.mean(x))
-
-    def std(x):
-        return float(np.std(x))
-
     print(f"\n{'Config':<10} | {'Split':<12} | {'Mean return':>12} | {'Std':>8}")
-    print(f"{'BO':<10} | {'opt-seeds':<12} | {mean(bo_opt_scores):12.2f} | {std(bo_opt_scores):8.2f}")
-    print(f"{'BO':<10} | {'test-seeds':<12} | {mean(bo_test_scores):12.2f} | {std(bo_test_scores):8.2f}")
-    print(f"{'Default':<10} | {'opt-seeds':<12} | {mean(base_opt_scores):12.2f} | {std(base_opt_scores):8.2f}")
-    print(f"{'Default':<10} | {'test-seeds':<12} | {mean(base_test_scores):12.2f} | {std(base_test_scores):8.2f}")
+    print(f"{'BO':<10} | {'opt-seeds':<12} | {np.mean(bo_opt_scores):12.2f} | {np.std(bo_opt_scores):8.2f}")
+    print(f"{'BO':<10} | {'test-seeds':<12} | {np.mean(bo_test_scores):12.2f} | {np.std(bo_test_scores):8.2f}")
+    print(f"{'Default':<10} | {'opt-seeds':<12} | {np.mean(base_opt_scores):12.2f} | {np.std(base_opt_scores):8.2f}")
+    print(f"{'Default':<10} | {'test-seeds':<12} | {np.mean(base_test_scores):12.2f} | {np.std(base_test_scores):8.2f}")
 
 
 if __name__ == "__main__":
