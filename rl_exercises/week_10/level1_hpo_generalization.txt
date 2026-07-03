@@ -1,0 +1,31 @@
+In level 1 we tested seed generalisation. We optimized on a few seeds and then tested on other hand-out seeds.
+We used a similar setup to last weeks level 2 experiment. With that we could compare the performance of the default
+used last week and the BO-tuned hyperparameters. We expected the BO-tuned hyperparameters to generlize better across the seeds
+than the fedault configuration.
+
+Setup
+-----
+Generalization axis : seeds (env=CartPole-v1, algo=Dyna-PPO)
+HPO method          : Bayesian Optimization
+Search space        : {'imag_horizon': (1, 15), 'imag_batches': (1, 15), 'model_epochs': (1, 5)}
+Optimization seeds  : [1, 2, 3, 4, 5, 6, 7, 8, 9]
+Held-out test seeds : [10, 11, 12, 13, 14, 15]
+Total steps/run     : 10000
+BO trials           : 12
+
+Best config found: {'imag_horizon': 4, 'imag_batches': 8, 'model_epochs': 5}
+Default config: {'imag_horizon': 5, 'imag_batches': 10, 'model_epochs': 3}
+
+Config     | Split        |  Mean return |      Std
+----------------------------------------------------
+BO         | opt-seeds    |        37.09 |     6.48
+BO         | test-seeds   |        36.17 |     4.25
+Default    | opt-seeds    |        33.10 |     5.32
+Default    | test-seeds   |        35.48 |     6.46
+
+Interpretation
+--------------
+The BO-tuned config slightly outperforms the default on the held-out seeds, and its generalization gap is comparable to the default's.
+This suggests the found hyperparameters generalize reasonably well across seeds, at least within this small sample.
+We would need to run significantly more optimization seeds, since this is just a really small sample, so the results are not that significant.
+
