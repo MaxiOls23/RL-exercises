@@ -1,0 +1,34 @@
+1.1a
+Looking at the return plot, Dyna-PPO reaches a high return level (~40) around
+step 4000, while Plain PPO does not reach that same level until around step
+11000-12000. So Dyna-PPO gets there roughly 7000-8000 steps sooner.
+
+1.1b
+Yes, a small one. At step 1000 both curves are almost identical (~20-22
+return). At step 2000, Plain PPO (~28) is actually ahead of Dyna-PPO
+(~23-24), this is the model learning penalty: The dynamics model is still
+inaccurate this early (see 1.2a), so the imagined rollouts used for extra
+updates are not helpful yet and slightly hold Dyna-PPO back. By step 3000
+the two are about equal again, and from step 4000 onward Dyna-PPO pulls
+clearly ahead. So the penalty is real but short-lived (roughly steps
+1000-3000).
+
+1.2a
+At step 2000 the one-step MSE is still high (~5e-2, the peak of the curve),
+and at this point PPO is actually ahead of Dyna-PPO (see 1.1b), the model
+is too inaccurate yet to help. By step 4000, MSE has dropped to around
+3e-2, and this is where Dyna-PPO pulls clearly ahead of PPO. So the model
+seems to need to get below roughly 3e-2 MSE before it starts being useful
+for imagined updates. By step 7000-8000, MSE is below ~1e-2 and the model
+is quite accurate, but by then PPO has caught up again, so very low MSE
+alone does not guarantee a return advantage.
+
+1.2b
+Early in training, E_k grows fast and compounds: By k=20 the error is
+roughly 4 (with a wide uncertainty band), and it already grows noticeably
+past k=10. Late in training, E_k stays small and almost flat across all
+k=1...20 (under ~0.1). This means: Early on, a short imag_horizon (around
+5, maybe up to 10) is safe, but going to k=15-20 early in training would
+feed the policy very wrong imagined data. Later in training, once the model
+is accurate, a longer imag_horizon is fine since errors barely compound.
+This matches using imag_horizon=5 as a reasonable middle ground.

@@ -8,6 +8,7 @@ where novelty(s) = RND prediction error at state s.
 """
 
 from typing import Any, Dict, List, Set, Tuple
+
 import os
 import pickle
 import sys
@@ -15,6 +16,7 @@ from pathlib import Path
 
 import gymnasium as gym
 import hydra
+import imageio
 import numpy as np
 import torch
 import torch.nn as nn
@@ -38,10 +40,6 @@ from torch.distributions import Categorical
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = True
-
-
-import imageio
-from typing import Tuple
 
 
 def record_episode_snapshot(
@@ -249,7 +247,6 @@ class NovelDPPOAgent(PPOAgent):
         """Compute raw RND prediction error for a single normalized observation."""
         t = torch.from_numpy(obs_norm).float().unsqueeze(0)
         with torch.no_grad():
-
             target_emb = self.target_rnd(t)
             predictor_emb = self.predictor_rnd(t)
 
@@ -505,9 +502,16 @@ class NovelDPPOAgent(PPOAgent):
 
                 entropy_loss = -dist.entropy().mean()
 
-                mask = torch.rand(b_states.shape[0], device=b_states.device) < self.update_proportion
+                mask = (
+                    torch.rand(b_states.shape[0], device=b_states.device)
+                    < self.update_proportion
+                )
                 if not torch.any(mask):
-                    mask[torch.randint(0, b_states.shape[0], (1,), device=b_states.device)] = True
+                    mask[
+                        torch.randint(
+                            0, b_states.shape[0], (1,), device=b_states.device
+                        )
+                    ] = True
                 b_states_norm = (
                     b_states - torch.as_tensor(self.obs_rms.mean, dtype=b_states.dtype)
                 ) / torch.sqrt(
@@ -567,11 +571,14 @@ class NovelDPPOAgent(PPOAgent):
         step_count = 0
         snapshot_idx = 0
         stats_log: List[Dict[str, Any]] = []
-        exploration_logs = []
 
         if record_snapshots:
             os.makedirs(snapshot_dir, exist_ok=True)
-            snapshot_steps = [int(total_steps * 0.1), int(total_steps * 0.5), int(total_steps * 0.9)]
+            snapshot_steps = [
+                int(total_steps * 0.1),
+                int(total_steps * 0.5),
+                int(total_steps * 0.9),
+            ]
 
         # Warm-up: initialize obs_rms and reward_rms before policy updates start
         self._init_obs_normalization()
@@ -624,7 +631,11 @@ class NovelDPPOAgent(PPOAgent):
                 positions.append(state.copy())
 
                 # Snapshot logic: record GIF + basic exploration stats at key steps
-                if record_snapshots and snapshot_idx < len(snapshot_steps) and step_count >= snapshot_steps[snapshot_idx]:
+                if (
+                    record_snapshots
+                    and snapshot_idx < len(snapshot_steps)
+                    and step_count >= snapshot_steps[snapshot_idx]
+                ):
                     print(f"\n[Snapshot] Recording at step {step_count}...")
                     try:
                         render_env = gym.make(self.env.spec.id, render_mode="rgb_array")
@@ -632,12 +643,18 @@ class NovelDPPOAgent(PPOAgent):
                         render_env = None
 
                     if render_env is not None:
-                        frames, ep_reward = record_episode_snapshot(self, render_env, seed=self.seed)
-                        gif_path = os.path.join(snapshot_dir, f"snapshot_step_{step_count:06d}.gif")
+                        frames, ep_reward = record_episode_snapshot(
+                            self, render_env, seed=self.seed
+                        )
+                        gif_path = os.path.join(
+                            snapshot_dir, f"snapshot_step_{step_count:06d}.gif"
+                        )
                         save_frames_as_gif(frames, gif_path, fps=gif_fps)
                         print(f"  Episode reward: {ep_reward:.2f}")
                     else:
-                        print("  Could not create render_env for GIF (render_mode unsupported)")
+                        print(
+                            "  Could not create render_env for GIF (render_mode unsupported)"
+                        )
 
                     # Compute simple exploration statistics on eval_env
                     all_states = []
@@ -662,8 +679,18 @@ class NovelDPPOAgent(PPOAgent):
                     spread = np.linalg.norm(positions_array - centroid, axis=1).mean()
                     coverage = np.std(positions_array, axis=0).mean()
 
-                    state_diversity = float(np.std(states_array, axis=0).mean()) if states_array.size else 0.0
-                    state_range = float((states_array.max(axis=0) - states_array.min(axis=0)).mean()) if states_array.size else 0.0
+                    state_diversity = (
+                        float(np.std(states_array, axis=0).mean())
+                        if states_array.size
+                        else 0.0
+                    )
+                    state_range = (
+                        float(
+                            (states_array.max(axis=0) - states_array.min(axis=0)).mean()
+                        )
+                        if states_array.size
+                        else 0.0
+                    )
                     stats = {
                         "step": step_count,
                         "num_states_visited": len(all_states),
@@ -671,7 +698,9 @@ class NovelDPPOAgent(PPOAgent):
                         "state_range": state_range,
                         "trajectory_spread": float(spread),
                         "trajectory_coverage": float(coverage),
-                        "avg_reward": float(np.mean(all_rewards)) if all_rewards else 0.0,
+                        "avg_reward": float(np.mean(all_rewards))
+                        if all_rewards
+                        else 0.0,
                     }
                     stats_log.append(stats)
                     print(f"  Exploration stats: {stats}")
