@@ -1,0 +1,18 @@
+Level 2 Multi-fidelity RL Results
+
+1. Scenario description:
+In model-based RL like Dyna-PPO, early performance can be deceptive.
+At low fidelity budgets (500 steps), the world model is untrained and inaccurate.
+Setups with high imag_horizon use bad model data early on and get low scores,
+making them look bad to multi-fidelity pruners.
+
+2. Optimization history and analysis:
+The late bloomer configuration was eliminated in round 1 (budget 500 steps).
+The early short-term signals tricked the optimizer.
+Optimizer selected configuration: {'imag_horizon': 2, 'imag_batches': 3, 'model_epochs': 2} (Score: 27.95)
+Early eliminated late bloomer:    {'imag_horizon': 12, 'imag_batches': 12, 'model_epochs': 5} (Score: 31.42)
+
+3. Conclusion:
+Yes, multi-fidelity optimization was negatively affected.
+An excellent final hyperparameter setup was dropped too early
+because early metrics did not correlate with final performance.

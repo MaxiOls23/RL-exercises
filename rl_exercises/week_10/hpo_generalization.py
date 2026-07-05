@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from typing import Any, Dict, List
+
 import argparse
 import random
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
 
 import gymnasium as gym
 import numpy as np
@@ -27,25 +28,34 @@ SEARCH_SPACE = {
 
 SCORE_ALPHA = 0.6
 
-DEFAULT_CONFIG = dict( # default config from last weeks experiment
+DEFAULT_CONFIG = dict(  # default config from last weeks experiment
     # PPO
-    epochs=4, batch_size=64,
-    lr_actor=3e-4, lr_critic=1e-3,
-    gamma=0.99, gae_lambda=0.95,
-    clip_eps=0.2, ent_coef=0.01, vf_coef=0.5,
+    epochs=4,
+    batch_size=64,
+    lr_actor=3e-4,
+    lr_critic=1e-3,
+    gamma=0.99,
+    gae_lambda=0.95,
+    clip_eps=0.2,
+    ent_coef=0.01,
+    vf_coef=0.5,
     hidden_size=64,
     # Dyna
     use_model=True,
-    model_lr=1e-3, model_epochs=3, model_batch_size=64,
-    imag_horizon=5, imag_batches=10, max_buffer_size=10000,
+    model_lr=1e-3,
+    model_epochs=3,
+    model_batch_size=64,
+    imag_horizon=5,
+    imag_batches=10,
+    max_buffer_size=10000,
 )
 
 
 def evaluate_config(
-        config: Dict[str, int],
-        seeds: List[int],
-        total_steps: int,
-        eval_interval: int = 1000,
+    config: Dict[str, int],
+    seeds: List[int],
+    total_steps: int,
+    eval_interval: int = 1000,
 ) -> List[float]:
     finals = []
     for seed in seeds:
@@ -53,7 +63,9 @@ def evaluate_config(
         metrics = train_and_collect(
             agent, total_steps=total_steps, eval_interval=eval_interval, seed=seed
         )
-        finals.append(float(np.mean(metrics["returns"][-3:])) if metrics["returns"] else 0.0)
+        finals.append(
+            float(np.mean(metrics["returns"][-3:])) if metrics["returns"] else 0.0
+        )
     return finals
 
 
@@ -72,18 +84,20 @@ def make_agent(seed: int = 42, **overrides) -> DynaPPOAgent:
 
 
 def train_and_collect(
-        agent: DynaPPOAgent,
-        total_steps: int,
-        eval_interval: int = 1000,
-        eval_episodes: int = 5,
-        seed: int = 42,
+    agent: DynaPPOAgent,
+    total_steps: int,
+    eval_interval: int = 1000,
+    eval_episodes: int = 5,
+    seed: int = 42,
 ) -> Dict[str, List]:
     eval_env = gym.make(agent.env.spec.id)
     eval_env.reset(seed=seed + 1)
 
     metrics: Dict[str, List] = {
-        "real_steps": [], "returns": [],
-        "model_state_mse": [], "model_reward_mse": [],
+        "real_steps": [],
+        "returns": [],
+        "model_state_mse": [],
+        "model_reward_mse": [],
     }
 
     while agent.real_steps < total_steps:
@@ -104,8 +118,15 @@ def train_and_collect(
             next_state, reward, term, trunc, _ = agent.env.step(action)
             done = term or trunc
             real_traj.append(
-                (state, action, logp_t.squeeze(), ent_t.squeeze(),
-                 float(reward), float(done), next_state)
+                (
+                    state,
+                    action,
+                    logp_t.squeeze(),
+                    ent_t.squeeze(),
+                    float(reward),
+                    float(done),
+                    next_state,
+                )
             )
             state = next_state
             agent.real_steps += 1
@@ -134,7 +155,9 @@ def train_and_collect(
     return metrics
 
 
-def run_gp_bo(opt_seeds, total_steps, n_trials, n_init: int = 3, seed: int = 0) -> Dict[str, int]:
+def run_gp_bo(
+    opt_seeds, total_steps, n_trials, n_init: int = 3, seed: int = 0
+) -> Dict[str, int]:
     """Run Gaussian-process Bayesian optimization.
 
     Randomly evaluates an initial set of configurations before fitting a
@@ -197,22 +220,36 @@ def run_gp_bo(opt_seeds, total_steps, n_trials, n_init: int = 3, seed: int = 0) 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Level 1: HPO generalization across seeds")
-    parser.add_argument("--opt_seeds", type=int, nargs="+", default=[1, 2, 3],
-                        help="Seeds used DURING Bayesian Optimization")
-    parser.add_argument("--test_seeds", type=int, nargs="+", default=[10, 11],
-                        help="Held-out seeds, never seen by BO, used to test generalization")
-    parser.add_argument("--total_steps", type=int, default=1000,
-                        help="Real env steps per training run")
-    parser.add_argument("--n_trials", type=int, default=2,
-                        help="Number of BO trials")
+    parser = argparse.ArgumentParser(
+        description="Level 1: HPO generalization across seeds"
+    )
+    parser.add_argument(
+        "--opt_seeds",
+        type=int,
+        nargs="+",
+        default=[1, 2, 3],
+        help="Seeds used DURING Bayesian Optimization",
+    )
+    parser.add_argument(
+        "--test_seeds",
+        type=int,
+        nargs="+",
+        default=[10, 11],
+        help="Held-out seeds, never seen by BO, used to test generalization",
+    )
+    parser.add_argument(
+        "--total_steps", type=int, default=1000, help="Real env steps per training run"
+    )
+    parser.add_argument("--n_trials", type=int, default=2, help="Number of BO trials")
     parser.add_argument("--output_dir", default="results")
 
     args = parser.parse_args()
 
     overlap = set(args.opt_seeds) & set(args.test_seeds)
     if overlap:
-        raise ValueError(f"opt_seeds and test_seeds must be disjoint, overlap: {overlap}")
+        raise ValueError(
+            f"opt_seeds and test_seeds must be disjoint, overlap: {overlap}"
+        )
 
     print(f"Optimization seeds : {args.opt_seeds}")
     print(f"Held-out seeds     : {args.test_seeds}")
@@ -223,22 +260,34 @@ def main() -> None:
     best_cfg = run_gp_bo(args.opt_seeds, args.total_steps, args.n_trials)
     print(f"  Best config found: {best_cfg}")
 
-    print("\n[2/3] Evaluating BO config on opt-seeds (in-sample) and test-seeds (held-out) ...")
+    print(
+        "\n[2/3] Evaluating BO config on opt-seeds (in-sample) and test-seeds (held-out) ..."
+    )
     bo_opt_scores = evaluate_config(best_cfg, args.opt_seeds, args.total_steps)
     bo_test_scores = evaluate_config(best_cfg, args.test_seeds, args.total_steps)
 
     print("\n[3/3] Evaluating Level-2 DEFAULT config on the same seed splits ...")
-    default_overrides = {
-        k: v for k, v in DEFAULT_CONFIG.items() if k in SEARCH_SPACE
-    }
-    base_opt_scores = evaluate_config(default_overrides, args.opt_seeds, args.total_steps)
-    base_test_scores = evaluate_config(default_overrides, args.test_seeds, args.total_steps)
+    default_overrides = {k: v for k, v in DEFAULT_CONFIG.items() if k in SEARCH_SPACE}
+    base_opt_scores = evaluate_config(
+        default_overrides, args.opt_seeds, args.total_steps
+    )
+    base_test_scores = evaluate_config(
+        default_overrides, args.test_seeds, args.total_steps
+    )
 
     print(f"\n{'Config':<10} | {'Split':<12} | {'Mean return':>12} | {'Std':>8}")
-    print(f"{'BO':<10} | {'opt-seeds':<12} | {np.mean(bo_opt_scores):12.2f} | {np.std(bo_opt_scores):8.2f}")
-    print(f"{'BO':<10} | {'test-seeds':<12} | {np.mean(bo_test_scores):12.2f} | {np.std(bo_test_scores):8.2f}")
-    print(f"{'Default':<10} | {'opt-seeds':<12} | {np.mean(base_opt_scores):12.2f} | {np.std(base_opt_scores):8.2f}")
-    print(f"{'Default':<10} | {'test-seeds':<12} | {np.mean(base_test_scores):12.2f} | {np.std(base_test_scores):8.2f}")
+    print(
+        f"{'BO':<10} | {'opt-seeds':<12} | {np.mean(bo_opt_scores):12.2f} | {np.std(bo_opt_scores):8.2f}"
+    )
+    print(
+        f"{'BO':<10} | {'test-seeds':<12} | {np.mean(bo_test_scores):12.2f} | {np.std(bo_test_scores):8.2f}"
+    )
+    print(
+        f"{'Default':<10} | {'opt-seeds':<12} | {np.mean(base_opt_scores):12.2f} | {np.std(base_opt_scores):8.2f}"
+    )
+    print(
+        f"{'Default':<10} | {'test-seeds':<12} | {np.mean(base_test_scores):12.2f} | {np.std(base_test_scores):8.2f}"
+    )
 
 
 if __name__ == "__main__":
